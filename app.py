@@ -54,7 +54,16 @@ def load_data():
     try:
         df = pd.read_csv(FILE_DATASET, sep=';')
         df['makanan_khas'] = df['makanan_khas'].fillna('Kuliner Lokal')
-        df['search_content'] = (df['place_name'].astype(str) + " " + df['city'].astype(str)).str.lower()
+        
+        # PERBAIKAN DISINI: Gabungkan semua info penting jadi satu teks pencarian
+        # Supaya kalau user cari nama makanan atau provinsi, datanya ketemu.
+        df['search_content'] = (
+            df['place_name'].astype(str) + " " + 
+            df['city'].astype(str) + " " + 
+            df['province'].astype(str) + " " + 
+            df['makanan_khas'].astype(str)
+        ).str.lower()
+        
         tfidf = TfidfVectorizer()
         matrix = tfidf.fit_transform(df['search_content'].fillna(''))
         return df, tfidf, matrix
@@ -74,14 +83,20 @@ def chat_with_gemini(user_text):
     # Context Retrieval
     vec = tfidf.transform([user_text.lower()])
     sim = cosine_similarity(vec, tfidf_matrix).flatten()
-    top_idx = sim.argsort()[-3:][::-1]
+    
+    # PERBAIKAN: Ambil 5 data teratas (sebelumnya cuma 3) biar infonya lebih kaya
+    top_idx = sim.argsort()[-5:][::-1] 
     
     context_info = ""
-    if sim[top_idx[0]] > 0.15:
-        context_info = "Data Wisata:\n"
+    # PERBAIKAN: Turunkan syarat kemiripan jadi 0.1 (biar gak pelit data)
+    if sim[top_idx[0]] > 0.1:
+        context_info = "Data Wisata & Kuliner Terkait:\n"
         for i in top_idx:
             row = df.iloc[i]
-            context_info += f"- {row['place_name']} ({row['city']}), Kuliner: {row['makanan_khas']}\n"
+            # Masukkan info makanan ke dalam context string agar dibaca Gemini
+            context_info += f"- {row['place_name']} di {row['city']}, {row['province']}. Kuliner Khas: {row['makanan_khas']}\n"
+    
+    # ... (kode prompt dan try-except di bawahnya biarkan sama) ...
 
     try:
         # PENTING: Pakai model hasil deteksi otomatis tadi
@@ -120,3 +135,4 @@ if user_input := st.chat_input("Mau jalan-jalan ke mana?"):
             st.markdown(balasan)
     
     st.session_state.messages.append({"role": "assistant", "content": balasan})
+
