@@ -149,35 +149,37 @@ def chat_with_gemini(user_text):
             row = df.iloc[i]
             context_info += f"- {row['place_name']} di {row['city']}, {row['province']}. Kuliner Khas: {row['makanan_khas']}\n"
 
-    # 2. Kirim ke AI dengan Instruksi SPESIFIK
+    # 2. Kirim ke AI dengan Instruksi KONDISIONAL
     try:
         clean_model = ACTIVE_MODEL.replace("models/", "")
         model = genai.GenerativeModel(clean_model)
         
         prompt = f"""
-        Peran: Kamu adalah 'Konco Plesir'. Jawablah sesingkat dan seefektif mungkin.
+        Peran: Kamu adalah 'Konco Plesir', travel consultant yang asik dan solutif.
         
-        Data Database: 
+        Data Database (Acuan lokasi): 
         {context_info}
         
         Pertanyaan User: {user_text}
         
-        ATURAN MENJAWAB (PENTING):
-        1. Jawab HANYA apa yang ditanyakan user. Jangan melebar ke topik lain yang tidak diminta.
-        2. KONDISI KHUSUS HARGA:
-           - Jika user tanya "Harga Makanan" -> HANYA sebut estimasi harga makanan (Misal: "Sekitar 15rb-25rb per porsi"). JANGAN bahas tiket/hotel.
-           - Jika user tanya "Harga Tiket" -> HANYA sebut harga tiket masuk.
-           - Jika user tanya "Total Biaya" atau "Budget Liburan" -> Baru boleh sebutkan rincian lengkap (Tiket + Makan + Hotel).
-        3. Gaya bahasa santai tapi *to the point*.
+        INSTRUKSI:
+        1. Jawab pertanyaan user dengan ramah dan gaya santai.
+        2. Fokus jelaskan daya tarik tempat wisata dan kuliner khasnya.
         
-        Contoh benar (User tanya harga makanan):
-        "Kalau Gudeg Yu Djum kisaran 25rb - 50rb per porsi tergantung lauknya kak. Murah kok!"
+        ATURAN KHUSUS HARGA & BIAYA:
+        - JIKA (dan HANYA JIKA) user bertanya soal "Harga", "Biaya", "Budget", "Tiket", atau "Ongkos":
+          Baru kamu berikan estimasi lengkap (Tiket Masuk 🎟️, Harga Makanan 🍜, Transport 🚗, Hotel 🏨) menggunakan pengetahuan umummu.
+        - JIKA user TIDAK tanya soal harga:
+          Cukup jelaskan tempatnya asik buat apa, suasananya gimana, dan tips singkat. Jangan berikan rincian harga.
+        
+        Contoh respon tanpa harga:
+        "Ke Malioboro asik banget buat jalan santai sore-sore. Jangan lupa cobain Gudeg Yu Djum di sana ya, legendaris banget!"
         """
         
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
-        return f"Waduh, error nih: {e}"
+        return f"Waduh, koneksi putus nih. Error: {e}"
 
 # ==========================================
 # 8. INTERFACE CHAT
@@ -209,6 +211,7 @@ if user_input := st.chat_input("Ketik pertanyaanmu di sini..."):
             message_placeholder.markdown(full_response)
     
     st.session_state.messages.append({"role": "assistant", "content": balasan})
+
 
 
 
