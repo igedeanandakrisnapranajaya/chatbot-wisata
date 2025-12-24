@@ -64,7 +64,7 @@ st.markdown("""
 # ==========================================
 # 3. SETUP API & MODEL
 # ==========================================
-ACTIVE_MODEL = "gemini-1.5-flash" 
+ACTIVE_MODEL = "gemini-2.5-pro" 
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
@@ -191,3 +191,4 @@ if user_input := st.chat_input("Ketik pertanyaanmu di sini..."):
             message_placeholder.markdown(full_response)
     
     st.session_state.messages.append({"role": "assistant", "content": balasan})
+
