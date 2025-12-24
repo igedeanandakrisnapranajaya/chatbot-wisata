@@ -140,36 +140,35 @@ st.markdown("##### Asisten wisata AI yang siap nemenin liburanmu!")
 # 7. LOGIKA CHAT (DENGAN MEMORI)
 # ==========================================
 def chat_with_gemini(user_text, history_messages):
-    # 1. SIAPKAN MEMORI (Ambil 4 chat terakhir biar konteks nyambung)
-    history_str = "\nRiwayat Percakapan Sebelumnya:\n"
-    # Kita ambil 4 pesan terakhir agar token tidak habis, tapi cukup buat konteks
+    # 1. SIAPKAN MEMORI (Ambil 4 chat terakhir)
+    history_str = "\nRiwayat Percakapan Sebelumnya (PENTING UNTUK KONTEKS):\n"
     for msg in history_messages[-4:]: 
         role = "User" if msg["role"] == "user" else "Bot"
         history_str += f"{role}: {msg['content']}\n"
 
-    # 2. CARI DATA DI CSV (Tetap berjalan)
+    # 2. CARI DATA DI CSV (Sebagai jangkar lokasi)
     vec = tfidf.transform([user_text.lower()])
     sim = cosine_similarity(vec, tfidf_matrix).flatten()
     top_idx = sim.argsort()[-5:][::-1]
     
     context_info = ""
-    # Kita turunkan threshold sedikit karena mungkin user cuma nanya "Harganya?" (keyword tidak cocok dgn CSV)
+    # Threshold rendah (0.05) supaya kalau user cuma tanya "Hotel dekat situ",
+    # sistem tetap membawa data lokasi yang relevan dari keyword sebelumnya
     if sim[top_idx[0]] > 0.05:
-        context_info = "Data Database Wisata Terkait:\n"
+        context_info = "Data Database Wisata (Gunakan untuk verifikasi nama tempat):\n"
         for i in top_idx:
             row = df.iloc[i]
             context_info += f"- {row['place_name']} di {row['city']}, {row['province']}. Kuliner: {row['makanan_khas']}\n"
     else:
-        # Jika tidak ketemu di CSV, mungkin user nanya konteks sebelumnya.
-        context_info = "Data Database: Tidak ada data spesifik untuk keyword ini. Gunakan Riwayat Percakapan."
+        context_info = "Data Database: Tidak ditemukan keyword baru. Fokus ke Riwayat Percakapan."
 
-    # 3. KIRIM KE GEMINI (Prompt + Data + Memori)
+    # 3. KIRIM KE GEMINI (Prompt Hybrid)
     try:
         clean_model = ACTIVE_MODEL.replace("models/", "")
         model = genai.GenerativeModel(clean_model)
         
         prompt = f"""
-        Peran: Kamu adalah 'Konco Plesir'. 
+        Peran: Kamu adalah 'Konco Plesir', travel consultant yang pintar dan solutif.
         
         {history_str}
         
@@ -177,15 +176,28 @@ def chat_with_gemini(user_text, history_messages):
         
         Pertanyaan Baru User: {user_text}
         
-        ATURAN MENJAWAB:
-        1. Cek 'Riwayat Percakapan'. Jika user bilang "di sana", "itu", atau "tempat tadi", rujuklah ke lokasi yang dibahas sebelumnya.
-        2. Jawab HANYA apa yang ditanyakan (To the point).
-        3. Gaya bahasa santai.
+        INSTRUKSI PEMBAGIAN TUGAS (WAJIB DIPATUHI):
+        1. TUGAS MEMORI: Cek 'Riwayat Percakapan'. Jika user bertanya "di sana", "harganya", atau "hotel dekat situ", kamu WAJIB merujuk ke lokasi yang sedang dibahas sebelumnya.
         
-        KONDISI HARGA:
-        - Jika tanya "Harga Makanan" -> Estimasi harga makanan saja.
-        - Jika tanya "Tiket" -> Estimasi tiket masuk.
-        - Jika tanya "Budget/Total" -> Baru rincikan lengkap.
+        2. TUGAS PENGETAHUAN UMUM (PENTING): 
+           Database kami TIDAK memuat data Harga, Hotel, atau Transport.
+           Oleh karena itu, jika user bertanya soal:
+           - 💰 HARGA/BUDGET/TIKET
+           - 🏨 PENGINAPAN/HOTEL
+           - 🚗 TRANSPORTASI
+           - 🍜 HARGA MAKANAN
+           
+           Kamu WAJIB menjawab menggunakan **PENGETAHUAN UMUM/INTERNET KNOWLEDGE** kamu sendiri.
+           - BERIKAN ESTIMASI (Perkiraan) range harga yang masuk akal di tahun 2024/2025.
+           - SEBUTKAN nama-nama hotel/daerah penginapan populer di sekitar lokasi tersebut.
+           - JANGAN PERNAH MENJAWAB "Data tidak tersedia di database". Kamu harus bantu estimasi.
+        
+        3. GAYA BAHASA:
+           - Santai, to the point.
+           - Kalau memberikan harga, gunakan range (Misal: "Sekitar 20rb - 50rb").
+        
+        Contoh Respon yang Benar:
+        "Kalau penginapan dekat Malioboro banyak banget kak! Ada Hotel Neo atau Whiz Hotel, range harganya sekitar 300rb - 500rb per malam. Kalau mau hemat bisa cari homestay di Sosrowijayan, mulai 150rb-an."
         """
         
         response = model.generate_content(prompt)
@@ -230,6 +242,7 @@ if user_input := st.chat_input("Ketik pertanyaanmu di sini..."):
 # ... (kode append history tetap sama)
     
     st.session_state.messages.append({"role": "assistant", "content": balasan})
+
 
 
 
