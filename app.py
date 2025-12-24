@@ -206,7 +206,12 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"], avatar=icon):
         st.markdown(msg["content"])
 
-# ... (kode input user sebelumnya tetap sama)
+if user_input := st.chat_input("Ketik pertanyaanmu di sini..."):
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.chat_message("user", avatar="😎"):
+        st.markdown(user_input)
+
+    # ... (kode input user sebelumnya tetap sama)
 
     with st.chat_message("assistant", avatar="🤖"):
         message_placeholder = st.empty()
@@ -223,6 +228,9 @@ for msg in st.session_state.messages:
             message_placeholder.markdown(full_response)
     
 # ... (kode append history tetap sama)
+    
+    st.session_state.messages.append({"role": "assistant", "content": balasan})
+
 
 
 
