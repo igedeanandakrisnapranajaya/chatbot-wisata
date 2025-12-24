@@ -11,14 +11,37 @@ st.set_page_config(page_title="Konco Plesir", page_icon="✈️")
 st.title("✈️ Konco Plesir: Chatbot Wisata Jawa")
 
 # ==========================================
-# 🔑 SETUP API GOOGLE (Cara Resmi)
+# 🔑 SETUP API & AUTO-DETECT MODEL
 # ==========================================
+ACTIVE_MODEL = "gemini-1.5-flash" # Default sementara
+
 try:
-    # Mengambil key dari Secrets
+    # 1. Konfigurasi API
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
+    
+    # 2. DETEKSI MODEL OTOMATIS (Biar tidak error 404)
+    st.sidebar.header("🔧 Status Sistem")
+    
+    valid_models = []
+    # Cari semua model yang mendukung generateContent
+    for m in genai.list_models():
+        if 'generateContent' in m.supported_generation_methods:
+            valid_models.append(m.name)
+            
+    if valid_models:
+        # Ambil model pertama yang ditemukan
+        ACTIVE_MODEL = valid_models[0]
+        st.sidebar.success(f"✅ Terhubung ke: {ACTIVE_MODEL}")
+        # Tampilkan list model di sidebar (untuk debugging)
+        with st.sidebar.expander("Lihat semua model tersedia"):
+            st.write(valid_models)
+    else:
+        st.sidebar.error("⚠️ API Key valid, tapi tidak ada model yang tersedia.")
+
 except Exception as e:
-    st.error("⚠️ Kunci API belum diatur di Streamlit Secrets.")
+    st.sidebar.error(f"⚠️ Masalah API: {str(e)}")
+    st.error("Cek API Key di Streamlit Secrets!")
     st.stop()
 
 # ==========================================
@@ -31,81 +54,69 @@ def load_data():
     try:
         df = pd.read_csv(FILE_DATASET, sep=';')
         df['makanan_khas'] = df['makanan_khas'].fillna('Kuliner Lokal')
-        # Buat kolom pencarian
         df['search_content'] = (df['place_name'].astype(str) + " " + df['city'].astype(str)).str.lower()
-        
         tfidf = TfidfVectorizer()
         matrix = tfidf.fit_transform(df['search_content'].fillna(''))
         return df, tfidf, matrix
-    except Exception as e:
+    except:
         return None, None, None
 
 df, tfidf, tfidf_matrix = load_data()
 
 if df is None:
-    st.error(f"❌ File '{FILE_DATASET}' tidak ditemukan di GitHub!")
+    st.error(f"❌ File '{FILE_DATASET}' tidak ditemukan!")
     st.stop()
 
 # ==========================================
-# 🤖 LOGIKA AI & REKOMENDASI
+# 🤖 LOGIKA AI
 # ==========================================
 def chat_with_gemini(user_text):
-    # Cari rekomendasi dulu dari CSV
+    # Context Retrieval
     vec = tfidf.transform([user_text.lower()])
     sim = cosine_similarity(vec, tfidf_matrix).flatten()
-    top_idx = sim.argsort()[-3:][::-1] # Ambil top 3
+    top_idx = sim.argsort()[-3:][::-1]
     
     context_info = ""
-    if sim[top_idx[0]] > 0.15: # Kalau kemiripan > 15%
-        context_info = "Data Wisata Terkait:\n"
+    if sim[top_idx[0]] > 0.15:
+        context_info = "Data Wisata:\n"
         for i in top_idx:
             row = df.iloc[i]
-            context_info += f"- Nama: {row['place_name']}, Lokasi: {row['city']}, Kuliner: {row['makanan_khas']}\n"
+            context_info += f"- {row['place_name']} ({row['city']}), Kuliner: {row['makanan_khas']}\n"
 
-    # Kirim ke Gemini pakai Library Resmi
     try:
-        # Menggunakan model flash yang cepat dan gratis
-        model = genai.GenerativeModel('gemini-pro')
+        # PENTING: Pakai model hasil deteksi otomatis tadi
+        # Hapus prefix 'models/' jika ada, karena library kadang nambahin sendiri
+        clean_model_name = ACTIVE_MODEL.replace("models/", "")
+        model = genai.GenerativeModel(clean_model_name)
         
         prompt = f"""
-        Peran: Kamu adalah 'Konco Plesir', asisten wisata yang asik dan gaul.
-        Pertanyaan User: {user_text}
-        
+        Kamu 'Konco Plesir'. Jawab santai.
+        User: {user_text}
         {context_info}
-        
-        Instruksi:
-        1. Jawab pertanyaan user berdasarkan data di atas jika ada.
-        2. Kalau tidak ada data, jawab pakai pengetahuan umum tapi tetap sopan.
-        3. Gaya bahasa santai.
         """
-        
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
-        return f"⚠️ Maaf, sistem lagi sibuk. Error: {str(e)}"
+        return f"⚠️ Error Chat: {str(e)}"
 
 # ==========================================
-# 💬 TAMPILAN CHAT
+# 💬 TAMPILAN
 # ==========================================
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Tampilkan history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# Input user
 if user_input := st.chat_input("Mau jalan-jalan ke mana?"):
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # Proses AI
     with st.chat_message("assistant"):
-        with st.spinner("Mikiri sik..."):
+        with st.spinner(f"Nanya ke {ACTIVE_MODEL}..."):
             balasan = chat_with_gemini(user_input)
             st.markdown(balasan)
     
     st.session_state.messages.append({"role": "assistant", "content": balasan})
-
