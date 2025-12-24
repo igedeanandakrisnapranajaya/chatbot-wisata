@@ -140,64 +140,61 @@ st.markdown("##### Asisten wisata AI yang siap nemenin liburanmu!")
 # 7. LOGIKA CHAT (DENGAN MEMORI)
 # ==========================================
 def chat_with_gemini(user_text, history_messages):
-    # 1. SIAPKAN MEMORI (Ambil 4 chat terakhir)
-    history_str = "\nRiwayat Percakapan Sebelumnya (PENTING UNTUK KONTEKS):\n"
+    # ... (Bagian 1: History & Bagian 2: CSV Search biarkan sama seperti sebelumnya) ...
+    # Langsung copy dari baris "vec = ..." sampai "if sim[top_idx[0]]..." itu sama.
+    # Kita fokus ganti bagian PROMPT di bawah ini:
+    
+    # --- MULAI COPY DARI SINI ---
+    # 1. SIAPKAN MEMORI 
+    history_str = "\nRiwayat Percakapan:\n"
     for msg in history_messages[-4:]: 
         role = "User" if msg["role"] == "user" else "Bot"
         history_str += f"{role}: {msg['content']}\n"
 
-    # 2. CARI DATA DI CSV (Sebagai jangkar lokasi)
+    # 2. CARI DATA DI CSV 
     vec = tfidf.transform([user_text.lower()])
     sim = cosine_similarity(vec, tfidf_matrix).flatten()
     top_idx = sim.argsort()[-5:][::-1]
     
     context_info = ""
-    # Threshold rendah (0.05) supaya kalau user cuma tanya "Hotel dekat situ",
-    # sistem tetap membawa data lokasi yang relevan dari keyword sebelumnya
     if sim[top_idx[0]] > 0.05:
-        context_info = "Data Database Wisata (Gunakan untuk verifikasi nama tempat):\n"
+        context_info = "Data Database Wisata (Verifikasi Lokasi):\n"
         for i in top_idx:
             row = df.iloc[i]
             context_info += f"- {row['place_name']} di {row['city']}, {row['province']}. Kuliner: {row['makanan_khas']}\n"
     else:
-        context_info = "Data Database: Tidak ditemukan keyword baru. Fokus ke Riwayat Percakapan."
+        context_info = "Data Database: Tidak ada. Gunakan Riwayat & Pengetahuan Umum."
 
-    # 3. KIRIM KE GEMINI (Prompt Hybrid)
     try:
         clean_model = ACTIVE_MODEL.replace("models/", "")
         model = genai.GenerativeModel(clean_model)
         
         prompt = f"""
-        Peran: Kamu adalah 'Konco Plesir', travel consultant yang pintar dan solutif.
+        Peran: Kamu adalah 'Konco Plesir'.
         
         {history_str}
-        
         {context_info}
+        Pertanyaan: {user_text}
         
-        Pertanyaan Baru User: {user_text}
+        INSTRUKSI UTAMA:
+        1. Jawab ramah dan solutif.
+        2. Jika tanya Estimasi Harga/Hotel/Transport -> Gunakan PENGETAHUAN UMUM (General Knowledge) untuk memberi kisaran harga (Rupiah).
         
-        INSTRUKSI PEMBAGIAN TUGAS (WAJIB DIPATUHI):
-        1. TUGAS MEMORI: Cek 'Riwayat Percakapan'. Jika user bertanya "di sana", "harganya", atau "hotel dekat situ", kamu WAJIB merujuk ke lokasi yang sedang dibahas sebelumnya.
+        ATURAN FORMATTING (WAJIB DIPATUHI AGAR RAPI):
+        - JANGAN menulis paragraf panjang. Pecah menjadi Poin-Poin.
+        - Gunakan format **Markdown**.
+        - Gunakan **Bullet Points** (-) untuk daftar nama tempat atau rincian biaya.
+        - Gunakan **Bold** untuk menonjolkan Harga (Rp...) atau Nama Tempat.
+        - WAJIB beri jarak antar baris (Enter) supaya tidak menumpuk.
         
-        2. TUGAS PENGETAHUAN UMUM (PENTING): 
-           Database kami TIDAK memuat data Harga, Hotel, atau Transport.
-           Oleh karena itu, jika user bertanya soal:
-           - 💰 HARGA/BUDGET/TIKET
-           - 🏨 PENGINAPAN/HOTEL
-           - 🚗 TRANSPORTASI
-           - 🍜 HARGA MAKANAN
-           
-           Kamu WAJIB menjawab menggunakan **PENGETAHUAN UMUM/INTERNET KNOWLEDGE** kamu sendiri.
-           - BERIKAN ESTIMASI (Perkiraan) range harga yang masuk akal di tahun 2024/2025.
-           - SEBUTKAN nama-nama hotel/daerah penginapan populer di sekitar lokasi tersebut.
-           - JANGAN PERNAH MENJAWAB "Data tidak tersedia di database". Kamu harus bantu estimasi.
+        Contoh Format Output yang Benar:
+        "Wah, ada beberapa opsi asik nih:
         
-        3. GAYA BAHASA:
-           - Santai, to the point.
-           - Kalau memberikan harga, gunakan range (Misal: "Sekitar 20rb - 50rb").
+        - **Hotel A**: Sekitar 300rb (Dekat alun-alun)
+        - **Hotel B**: Sekitar 500rb (Ada kolam renang)
         
-        Contoh Respon yang Benar:
-        "Kalau penginapan dekat Malioboro banyak banget kak! Ada Hotel Neo atau Whiz Hotel, range harganya sekitar 300rb - 500rb per malam. Kalau mau hemat bisa cari homestay di Sosrowijayan, mulai 150rb-an."
+        Untuk makanannya:
+        - **Nasi Liwet**: 20rb-an per porsi."
         """
         
         response = model.generate_content(prompt)
@@ -218,30 +215,43 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"], avatar=icon):
         st.markdown(msg["content"])
 
+# ... (Bagian atas kode input user sama)
+
 if user_input := st.chat_input("Ketik pertanyaanmu di sini..."):
+    # Tampilkan user input
     st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user", avatar="😎"):
         st.markdown(user_input)
 
-    # ... (kode input user sebelumnya tetap sama)
-
+    # Tampilkan respon bot
     with st.chat_message("assistant", avatar="🤖"):
         message_placeholder = st.empty()
         with st.spinner("Sedang mencari info terbaik..."):
             
-            # PERUBAHAN DISINI: Kita kirim 'st.session_state.messages' sebagai parameter kedua
+            # Panggil Fungsi Chat
             balasan = chat_with_gemini(user_input, st.session_state.messages)
             
+            # --- PERBAIKAN LOGIKA TYPING EFFECT ---
             full_response = ""
-            for chunk in balasan.split():
-                full_response += chunk + " "
-                time.sleep(0.05)
+            
+            # Teknik 1: Tampilkan teks langsung (Tanpa efek ngetik) -> Paling aman buat format
+            # message_placeholder.markdown(balasan) 
+            
+            # Teknik 2: Efek ngetik yang AMAN untuk Markdown (Per Karakter atau Per Baris)
+            # Kita pakai split('\n') supaya ENTER-nya tidak hilang.
+            lines = balasan.split('\n') 
+            for line in lines:
+                full_response += line + "\n" # Tambahkan enter manual
+                time.sleep(0.05) # Atur kecepatan
+                # Simbol kursor
                 message_placeholder.markdown(full_response + "▌")
+                
+            # Tampilkan hasil akhir bersih tanpa kursor
             message_placeholder.markdown(full_response)
     
-# ... (kode append history tetap sama)
-    
+    # Simpan ke session state
     st.session_state.messages.append({"role": "assistant", "content": balasan})
+
 
 
 
