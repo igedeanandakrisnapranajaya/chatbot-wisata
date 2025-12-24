@@ -65,7 +65,7 @@ def chat_with_gemini(user_text):
     # Kirim ke Gemini pakai Library Resmi
     try:
         # Menggunakan model flash yang cepat dan gratis
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-pro')
         
         prompt = f"""
         Peran: Kamu adalah 'Konco Plesir', asisten wisata yang asik dan gaul.
@@ -108,3 +108,4 @@ if user_input := st.chat_input("Mau jalan-jalan ke mana?"):
             st.markdown(balasan)
     
     st.session_state.messages.append({"role": "assistant", "content": balasan})
+
