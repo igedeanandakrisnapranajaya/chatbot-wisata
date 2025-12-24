@@ -4,23 +4,34 @@ import google.generativeai as genai
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import time
+import os # Import os untuk cek keberadaan file
 
 # ==========================================
-# 1. KONFIGURASI HALAMAN
+# KONFIGURASI NAMA FILE GAMBAR
+# ==========================================
+# GANTI tulisan 'logo.png' di bawah ini jika nama filemu berbeda!
+NAMA_FILE_LOGO = "logo.png"
+
+# Cek apakah file gambar benar-benar ada di GitHub
+gambar_tersedia = os.path.exists(NAMA_FILE_LOGO)
+
+# ==========================================
+# 1. KONFIGURASI HALAMAN & FAVICON
 # ==========================================
 st.set_page_config(
     page_title="Konco Plesir",
-    page_icon="🏖️",
+    # Jika gambar ada, pakai jadi icon tab browser. Jika tidak, pakai emoji.
+    page_icon=NAMA_FILE_LOGO if gambar_tersedia else "🏖️",
     layout="centered",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================
-# 2. DEKORASI CSS (Tema Cerah & Ceria)
+# 2. DEKORASI CSS (Tema Cerah)
 # ==========================================
 st.markdown("""
 <style>
-    /* Mengubah warna background header chat biar fresh */
+    /* Mengubah warna background header chat */
     .stAppHeader {
         background-color: #FFFFFF;
         opacity: 0.9;
@@ -38,13 +49,14 @@ st.markdown("""
     
     /* Mengubah tampilan chat bubble user */
     .stChatMessage[data-testid="stChatMessage"]:nth-child(odd) {
-        background-color: #E3F2FD; /* Biru sangat muda */
+        background-color: #E3F2FD;
         border-radius: 10px;
     }
     
-    /* Mengubah tombol kirim */
-    .stChatInputSubmitButton {
-        color: #0072ff !important;
+    /* Agar gambar logo di tengah tidak terlalu nempel ke atas */
+    .main-logo {
+        margin-top: -50px;
+        margin-bottom: 20px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -53,15 +65,11 @@ st.markdown("""
 # 3. SETUP API & MODEL
 # ==========================================
 ACTIVE_MODEL = "gemini-1.5-flash" 
-
 try:
     api_key = st.secrets["GEMINI_API_KEY"]
     genai.configure(api_key=api_key)
-    
-    # Auto-detect model
     valid_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-    if valid_models:
-        ACTIVE_MODEL = valid_models[0]
+    if valid_models: ACTIVE_MODEL = valid_models[0]
 except Exception as e:
     st.error(f"⚠️ Error API Key: {e}")
     st.stop()
@@ -70,42 +78,40 @@ except Exception as e:
 # 4. LOAD DATASET
 # ==========================================
 FILE_DATASET = 'datasetpariwisata_jawa_makanan.csv'
-
 @st.cache_resource
 def load_data():
     try:
         df = pd.read_csv(FILE_DATASET, sep=';')
         df['makanan_khas'] = df['makanan_khas'].fillna('Kuliner Lokal')
-        
         df['search_content'] = (
-            df['place_name'].astype(str) + " " + 
-            df['city'].astype(str) + " " + 
-            df['province'].astype(str) + " " + 
-            df['makanan_khas'].astype(str)
+            df['place_name'].astype(str) + " " + df['city'].astype(str) + " " + 
+            df['province'].astype(str) + " " + df['makanan_khas'].astype(str)
         ).str.lower()
-        
         tfidf = TfidfVectorizer()
         matrix = tfidf.fit_transform(df['search_content'].fillna(''))
         return df, tfidf, matrix
-    except:
-        return None, None, None
+    except: return None, None, None
 
 df, tfidf, tfidf_matrix = load_data()
-
 if df is None:
-    st.error("❌ Database wisata tidak ditemukan!")
-    st.stop()
+    st.error("❌ Database wisata tidak ditemukan!"); st.stop()
 
 # ==========================================
-# 5. SIDEBAR
+# 5. SIDEBAR DENGAN LOGO
 # ==========================================
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/201/201623.png", width=80)
-    st.title("🧳 Konco Plesir")
+    # --- LOGO DI SIDEBAR ---
+    if gambar_tersedia:
+        # Tampilkan logo. width=150 biar pas ukurannya.
+        st.image(NAMA_FILE_LOGO, width=150)
+    else:
+        # Fallback kalau lupa upload gambar
+        st.header("🧳")
+        
+    st.title("Konco Plesir")
     st.caption("Teman jalan-jalan keliling Jawa!")
     st.markdown("---")
     
-    # Tombol Reset Chat
     if st.button("🔄 Mulai Chat Baru", type="secondary"):
         st.session_state.messages = []
         st.rerun()
@@ -114,8 +120,15 @@ with st.sidebar:
     st.info("💡 **Tips:** Coba tanya 'Makanan khas Jogja' atau 'Pantai di Malang'.")
 
 # ==========================================
-# 6. HALAMAN UTAMA
+# 6. HALAMAN UTAMA DENGAN LOGO
 # ==========================================
+# --- LOGO DI TENGAH (OPSIONAL) ---
+# Jika ingin ada logo besar di atas judul, aktifkan kode ini:
+# if gambar_tersedia:
+#    col1, col2, col3 = st.columns([1,2,1])
+#    with col2: # Taruh di kolom tengah biar rapi
+#        st.image(NAMA_FILE_LOGO, use_column_width=True, className="main-logo")
+
 # Judul dengan efek gradasi
 st.markdown('<p class="gradient-text">✈️ Konco Plesir</p>', unsafe_allow_html=True)
 st.markdown("##### Asisten wisata AI yang siap nemenin liburanmu!")
@@ -138,23 +151,15 @@ def chat_with_gemini(user_text):
     try:
         clean_model = ACTIVE_MODEL.replace("models/", "")
         model = genai.GenerativeModel(clean_model)
-        
         prompt = f"""
-        Peran: Kamu adalah 'Konco Plesir', tour guide lokal yang asik, ramah, dan gaul.
-        Data Tersedia: 
-        {context_info}
-        
-        Pertanyaan User: {user_text}
-        
-        Instruksi:
-        - Jawab dengan nada ceria dan semangat (gunakan emoji 🏖️🍹).
-        - Fokus pada pertanyaan user.
-        - Jika merekomendasikan tempat, sebutkan juga kuliner khasnya jika ada datanya.
+        Peran: Kamu adalah 'Konco Plesir', tour guide lokal yang asik dan ramah.
+        Data: {context_info}
+        User: {user_text}
+        Instruksi: Jawab ceria (emoji 🏖️🍹). Fokus pada pertanyaan. Sebutkan kuliner jika ada datanya.
         """
         response = model.generate_content(prompt)
         return response.text
-    except Exception as e:
-        return f"Waduh, koneksi putus nih. Error: {e}"
+    except Exception as e: return f"Error koneksi: {e}"
 
 # ==========================================
 # 8. INTERFACE CHAT
@@ -178,7 +183,6 @@ if user_input := st.chat_input("Ketik pertanyaanmu di sini..."):
         message_placeholder = st.empty()
         with st.spinner("Sedang mencari info terbaik..."):
             balasan = chat_with_gemini(user_input)
-            
             full_response = ""
             for chunk in balasan.split():
                 full_response += chunk + " "
