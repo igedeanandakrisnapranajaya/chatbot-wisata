@@ -137,7 +137,7 @@ st.markdown("##### Asisten wisata AI yang siap nemenin liburanmu!")
 # 7. LOGIKA CHAT
 # ==========================================
 def chat_with_gemini(user_text):
-    # 1. Cari Data di CSV (RAG)
+    # 1. Cari Data di CSV
     vec = tfidf.transform([user_text.lower()])
     sim = cosine_similarity(vec, tfidf_matrix).flatten()
     top_idx = sim.argsort()[-5:][::-1]
@@ -149,32 +149,31 @@ def chat_with_gemini(user_text):
             row = df.iloc[i]
             context_info += f"- {row['place_name']} di {row['city']}, {row['province']}. Kuliner Khas: {row['makanan_khas']}\n"
 
-    # 2. Kirim ke AI dengan Instruksi yang LEBIH LENGKAP
+    # 2. Kirim ke AI dengan Instruksi KONDISIONAL
     try:
         clean_model = ACTIVE_MODEL.replace("models/", "")
         model = genai.GenerativeModel(clean_model)
         
         prompt = f"""
-        Peran: Kamu adalah 'Konco Plesir', travel consultant profesional yang detail tapi bahasanya santai & gaul.
+        Peran: Kamu adalah 'Konco Plesir', travel consultant yang asik dan solutif.
         
-        Data Database (Gunakan sebagai referensi utama lokasi): 
+        Data Database (Acuan lokasi): 
         {context_info}
         
         Pertanyaan User: {user_text}
         
-        INSTRUKSI WAJIB (PENTING):
-        1. Jawab pertanyaan user dengan ramah.
-        2. Jika user bertanya rekomendasi wisata, JANGAN HANYA SEBUT NAMA.
-        3. WAJIB BERIKAN 'ESTIMASI BIAYA' (Gunakan pengetahuan umummu/internet knowledge):
-           - 🎟️ Tiket Masuk (Kira-kira berapa Rupiah)
-           - 🍜 Harga Makanan di sana (Range harga)
-           - 🚗 Transportasi (Opsi ke sana naik apa)
-           - 🏨 Penginapan/Hotel terdekat (Sebutkan nama daerah atau kisaran harga hotel bintang 2-3)
-        4. Berikan disclaimer bahwa harga bisa berubah sewaktu-waktu.
-        5. Gunakan format List/Poin biar enak dibaca.
+        INSTRUKSI:
+        1. Jawab pertanyaan user dengan ramah dan gaya santai.
+        2. Fokus jelaskan daya tarik tempat wisata dan kuliner khasnya.
         
-        Contoh gaya bicara:
-        "Wah, kalau ke Malioboro wajib coba Gudeg Yu Djum! Tiket masuk gratis kok, cuma bayar parkir ceban (Rp 10.000). Penginapan banyak di sosrowijayan mulai 200rb-an."
+        ATURAN KHUSUS HARGA & BIAYA:
+        - JIKA (dan HANYA JIKA) user bertanya soal "Harga", "Biaya", "Budget", "Tiket", atau "Ongkos":
+          Baru kamu berikan estimasi lengkap (Tiket Masuk 🎟️, Harga Makanan 🍜, Transport 🚗, Hotel 🏨) menggunakan pengetahuan umummu.
+        - JIKA user TIDAK tanya soal harga:
+          Cukup jelaskan tempatnya asik buat apa, suasananya gimana, dan tips singkat. Jangan berikan rincian harga.
+        
+        Contoh respon tanpa harga:
+        "Ke Malioboro asik banget buat jalan santai sore-sore. Jangan lupa cobain Gudeg Yu Djum di sana ya, legendaris banget!"
         """
         
         response = model.generate_content(prompt)
@@ -212,5 +211,6 @@ if user_input := st.chat_input("Ketik pertanyaanmu di sini..."):
             message_placeholder.markdown(full_response)
     
     st.session_state.messages.append({"role": "assistant", "content": balasan})
+
 
 
