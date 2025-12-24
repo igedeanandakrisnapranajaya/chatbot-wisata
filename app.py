@@ -53,7 +53,7 @@ if df is None:
 # --- FUNGSI CHAT KE GEMINI ---
 def get_gemini_response(user_input, context_data):
     # Setup Model (Hardcoded ke v1beta/flash agar stabil)
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={API_KEY}"
     
     prompt = {
         "contents": [{
@@ -110,4 +110,5 @@ if prompt := st.chat_input("Mau liburan ke mana bro?"):
     # Tampilkan balasan bot
     with st.chat_message("assistant"):
         st.markdown(response)
+
     st.session_state.messages.append({"role": "assistant", "content": response})
