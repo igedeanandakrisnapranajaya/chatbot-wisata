@@ -130,9 +130,10 @@ if user_input := st.chat_input("Mau jalan-jalan ke mana?"):
         st.markdown(user_input)
 
     with st.chat_message("assistant"):
-        with st.spinner(f"Nanya ke {ACTIVE_MODEL}..."):
+        with st.spinner(f"Mikir dulu ya..."):
             balasan = chat_with_gemini(user_input)
             st.markdown(balasan)
     
     st.session_state.messages.append({"role": "assistant", "content": balasan})
+
 
