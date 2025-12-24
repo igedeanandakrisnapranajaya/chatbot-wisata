@@ -1,4 +1,4 @@
 pandas
-requests
+google-generativeai
 scikit-learn
 streamlit
