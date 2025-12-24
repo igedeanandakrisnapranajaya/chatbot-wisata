@@ -136,50 +136,62 @@ st.markdown("##### Asisten wisata AI yang siap nemenin liburanmu!")
 # ==========================================
 # 7. LOGIKA CHAT
 # ==========================================
-def chat_with_gemini(user_text):
-    # 1. Cari Data di CSV
+# ==========================================
+# 7. LOGIKA CHAT (DENGAN MEMORI)
+# ==========================================
+def chat_with_gemini(user_text, history_messages):
+    # 1. SIAPKAN MEMORI (Ambil 4 chat terakhir biar konteks nyambung)
+    history_str = "\nRiwayat Percakapan Sebelumnya:\n"
+    # Kita ambil 4 pesan terakhir agar token tidak habis, tapi cukup buat konteks
+    for msg in history_messages[-4:]: 
+        role = "User" if msg["role"] == "user" else "Bot"
+        history_str += f"{role}: {msg['content']}\n"
+
+    # 2. CARI DATA DI CSV (Tetap berjalan)
     vec = tfidf.transform([user_text.lower()])
     sim = cosine_similarity(vec, tfidf_matrix).flatten()
     top_idx = sim.argsort()[-5:][::-1]
     
     context_info = ""
-    if sim[top_idx[0]] > 0.1:
-        context_info = "Data Database Wisata:\n"
+    # Kita turunkan threshold sedikit karena mungkin user cuma nanya "Harganya?" (keyword tidak cocok dgn CSV)
+    if sim[top_idx[0]] > 0.05:
+        context_info = "Data Database Wisata Terkait:\n"
         for i in top_idx:
             row = df.iloc[i]
-            context_info += f"- {row['place_name']} di {row['city']}, {row['province']}. Kuliner Khas: {row['makanan_khas']}\n"
+            context_info += f"- {row['place_name']} di {row['city']}, {row['province']}. Kuliner: {row['makanan_khas']}\n"
+    else:
+        # Jika tidak ketemu di CSV, mungkin user nanya konteks sebelumnya.
+        context_info = "Data Database: Tidak ada data spesifik untuk keyword ini. Gunakan Riwayat Percakapan."
 
-    # 2. Kirim ke AI dengan Instruksi KONDISIONAL
+    # 3. KIRIM KE GEMINI (Prompt + Data + Memori)
     try:
         clean_model = ACTIVE_MODEL.replace("models/", "")
         model = genai.GenerativeModel(clean_model)
         
         prompt = f"""
-        Peran: Kamu adalah 'Konco Plesir', travel consultant yang asik dan solutif.
+        Peran: Kamu adalah 'Konco Plesir'. 
         
-        Data Database (Acuan lokasi): 
+        {history_str}
+        
         {context_info}
         
-        Pertanyaan User: {user_text}
+        Pertanyaan Baru User: {user_text}
         
-        INSTRUKSI:
-        1. Jawab pertanyaan user dengan ramah dan gaya santai.
-        2. Fokus jelaskan daya tarik tempat wisata dan kuliner khasnya.
+        ATURAN MENJAWAB:
+        1. Cek 'Riwayat Percakapan'. Jika user bilang "di sana", "itu", atau "tempat tadi", rujuklah ke lokasi yang dibahas sebelumnya.
+        2. Jawab HANYA apa yang ditanyakan (To the point).
+        3. Gaya bahasa santai.
         
-        ATURAN KHUSUS HARGA & BIAYA:
-        - JIKA (dan HANYA JIKA) user bertanya soal "Harga", "Biaya", "Budget", "Tiket", atau "Ongkos":
-          Baru kamu berikan estimasi lengkap (Tiket Masuk 🎟️, Harga Makanan 🍜, Transport 🚗, Hotel 🏨) menggunakan pengetahuan umummu.
-        - JIKA user TIDAK tanya soal harga:
-          Cukup jelaskan tempatnya asik buat apa, suasananya gimana, dan tips singkat. Jangan berikan rincian harga.
-        
-        Contoh respon tanpa harga:
-        "Ke Malioboro asik banget buat jalan santai sore-sore. Jangan lupa cobain Gudeg Yu Djum di sana ya, legendaris banget!"
+        KONDISI HARGA:
+        - Jika tanya "Harga Makanan" -> Estimasi harga makanan saja.
+        - Jika tanya "Tiket" -> Estimasi tiket masuk.
+        - Jika tanya "Budget/Total" -> Baru rincikan lengkap.
         """
         
         response = model.generate_content(prompt)
         return response.text
     except Exception as e:
-        return f"Waduh, koneksi putus nih. Error: {e}"
+        return f"Waduh, error nih: {e}"
 
 # ==========================================
 # 8. INTERFACE CHAT
@@ -194,15 +206,15 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"], avatar=icon):
         st.markdown(msg["content"])
 
-if user_input := st.chat_input("Ketik pertanyaanmu di sini..."):
-    st.session_state.messages.append({"role": "user", "content": user_input})
-    with st.chat_message("user", avatar="😎"):
-        st.markdown(user_input)
+# ... (kode input user sebelumnya tetap sama)
 
     with st.chat_message("assistant", avatar="🤖"):
         message_placeholder = st.empty()
         with st.spinner("Sedang mencari info terbaik..."):
-            balasan = chat_with_gemini(user_input)
+            
+            # PERUBAHAN DISINI: Kita kirim 'st.session_state.messages' sebagai parameter kedua
+            balasan = chat_with_gemini(user_input, st.session_state.messages)
+            
             full_response = ""
             for chunk in balasan.split():
                 full_response += chunk + " "
@@ -210,7 +222,8 @@ if user_input := st.chat_input("Ketik pertanyaanmu di sini..."):
                 message_placeholder.markdown(full_response + "▌")
             message_placeholder.markdown(full_response)
     
-    st.session_state.messages.append({"role": "assistant", "content": balasan})
+# ... (kode append history tetap sama)
+
 
 
 
